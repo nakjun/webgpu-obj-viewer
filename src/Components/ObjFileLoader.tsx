@@ -1,6 +1,6 @@
 import React, { ChangeEvent, useState, useRef } from 'react';
-import { ObjLoader } from '../Script/ObjLoader'; // ObjLoader 클래스를 임포트합니다.
-import { Renderer } from '../Script/Renderer';
+import { ObjLoader } from '../renderer/ObjLoader'; // ObjLoader 클래스를 임포트합니다.
+import { Renderer } from '../renderer/Renderer';
 
 const ObjFileUploader: React.FC = () => {
   const [objLoader] = useState(new ObjLoader());  
@@ -28,7 +28,7 @@ const ObjFileUploader: React.FC = () => {
   return (
     <div>
       <input type="file" onChange={handleFileChange} accept=".obj" />
-      <canvas ref={canvasRef} width="640" height="480"></canvas>
+      
     </div>
   );
 };
