@@ -127,6 +127,8 @@ export class Renderer extends RendererOrigin {
 
         this.device.queue.submit([commandEncoder.finish()]);
         await this.device.queue.onSubmittedWorkDone();
+
+        this.frameCount++;
     }
 
     async MakeModelData() {
@@ -344,8 +346,14 @@ export class Renderer extends RendererOrigin {
 
         this.modelBuffersMap.forEach((buffers, modelName) => {
 
-            if (!modelName.includes("Headlight")) {
-                const lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
+            if (modelName.includes("Headlight")) {
+                let lightData = [170.0, 500.0, 150.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
+                if (this.frameCount % 180 == 0) {
+                    if (this.localFrameCount % 2 == 0) {
+                        lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
+                    }
+                    this.localFrameCount++;
+                }
 
                 // 라이트 정보 설정
                 this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
@@ -359,12 +367,8 @@ export class Renderer extends RendererOrigin {
                 passEncoder.setBindGroup(0, buffers.bindGroup);
                 passEncoder.drawIndexed(buffers.indicesLength);
             }
-        });
-        this.modelBuffersMap.forEach((buffers, modelName) => {
-
-            if (modelName.includes("Headlight")) {
-                const lightData = [170.0, 500.0, 150.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
-                //const lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
+            else {
+                const lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
 
                 // 라이트 정보 설정
                 this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
