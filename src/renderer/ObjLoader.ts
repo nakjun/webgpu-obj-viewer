@@ -18,6 +18,10 @@ export class ObjLoader {
     vertexUVs: number[][] = [];
     faces: string[][] = [];
 
+    curr_offset_pos: number = 0;
+    curr_offset_uv: number = 0;
+    curr_offset_norm: number = 0;
+
     parse(objData: string, scale: number = 1.0) {
         objData.split('\n').forEach(line => {
             const parts = line.trim().split(/\s+/);
@@ -26,10 +30,6 @@ export class ObjLoader {
                     this.finishCurrentModel(); // 현재 모델 처리를 마침
                     this.currentModel = new ObjModel(parts.slice(1).join(' '));
                     this.models.set(this.currentModel.name, this.currentModel);
-                    this.vertexPositions = []; // 새 모델을 위해 배열 초기화
-                    this.vertexNormals = [];
-                    this.vertexUVs = [];
-                    this.faces = [];
                     break;
                 case 'v':
                     this.vertexPositions.push(parts.slice(1).map(coord => parseFloat(coord) * scale));
@@ -56,7 +56,10 @@ export class ObjLoader {
 
             this.faces.forEach(faceParts => {
                 const faceIndices = faceParts.map(part => {
-                    const [pos, tex, norm] = part.split('/').map(e => e ? parseInt(e) - 1 : undefined);
+                    let [pos, tex, norm] = part.split('/').map(e => e ? parseInt(e) - 1 : 0);
+                    pos -= this.curr_offset_pos;
+                    tex -= this.curr_offset_uv;
+                    norm -= this.curr_offset_norm;
                     const key = `${pos}|${tex}|${norm}`;
 
                     if (indexMap.has(key)) {
@@ -64,7 +67,6 @@ export class ObjLoader {
                     } else {
                         if (pos !== undefined) {
                             const position = this.vertexPositions[pos];
-                            //console.log(pos, position);
                             this.currentModel!.vertices.push(...position);
                         }
 
@@ -94,6 +96,13 @@ export class ObjLoader {
                 this.calculateNormals().forEach(n => this.currentModel!.normals.push(n));
             }
         }
+        this.curr_offset_pos += this.vertexPositions.length;
+        this.curr_offset_uv += this.vertexUVs.length;
+        this.curr_offset_norm += this.vertexNormals.length;
+        this.vertexPositions = [];
+        this.vertexUVs = [];
+        this.vertexNormals = [];
+        this.faces = [];
     }
 
     calculateNormals(): number[] {

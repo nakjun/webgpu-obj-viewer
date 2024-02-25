@@ -17,8 +17,7 @@ function App() {
 
 
   return (
-    <div>
-      <ObjFileLoader></ObjFileLoader>      
+    <div>      
       <canvas id="gfx-main" width="1920" height="800"></canvas>
     </div>
   );

@@ -61,11 +61,6 @@ export class RendererOrigin {
         this.fpsDisplay = document.getElementById('fpsDisplay');
 
         this.systemGUI = new SystemGUI();
-        this.systemGUI.performanceGui.add(this.stats, 'ms').name('ms').listen();
-        this.systemGUI.performanceGui.add(this.stats, 'fps').name('fps').listen();
-
-        this.systemGUI.renderOptionGui.add(this.renderOptions, 'wireFrame').name('WireFrame');
-        this.systemGUI.renderOptionGui.add(this.renderOptions, 'renderObject').name('renderObject');
         this.camPosXControl = this.systemGUI.renderOptionGui.add(this.renderOptions, 'camPosX', -100, 100).name('Camera Position X').onChange((value: number) => {
             this.camera.position[0] = value;
         });
@@ -94,17 +89,8 @@ export class RendererOrigin {
         });
         this.createDepthTexture();
         this.createResolveTexture();
-        this.printDeviceLimits();
+        //this.printDeviceLimits();
 
-    }
-    printDeviceLimits() {
-        const limits: GPUSupportedLimits = this.device.limits;
-        this.systemGUI.gpuDeviceGui.add(limits, 'maxComputeWorkgroupSizeX').name('Max Compute Workgroup Size X');
-        this.systemGUI.gpuDeviceGui.add(limits, 'maxComputeWorkgroupSizeY').name('Max Compute Workgroup Size Y');
-        this.systemGUI.gpuDeviceGui.add(limits, 'maxComputeWorkgroupSizeZ').name('Max Compute Workgroup Size Z');
-        this.systemGUI.gpuDeviceGui.add(limits, 'maxComputeInvocationsPerWorkgroup').name('Max Compute Invocations Per Workgroup');
-        this.systemGUI.gpuDeviceGui.add(limits, 'maxComputeWorkgroupsPerDimension').name('Max Compute Workgroups Per Dimension');
-        this.systemGUI.gpuDeviceGui.add(limits, 'maxStorageBufferBindingSize').name('Max Storage Buffer Binding Size');
     }
 
     createDepthTexture() {

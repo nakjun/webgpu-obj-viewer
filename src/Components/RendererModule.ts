@@ -57,7 +57,6 @@ export const Initialize = async () => {
             // 카메라 줌 인/아웃 로직 구현
             sceneManager.zoomCamera(event.deltaY / 100);
         });
-        sceneManager.createRenderPipeline();
         animate();
     });
 

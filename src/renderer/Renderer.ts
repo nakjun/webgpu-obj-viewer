@@ -10,14 +10,16 @@ interface ModelBuffers {
     uvBuffer: GPUBuffer;
     normalBuffer: GPUBuffer;
     indicesLength: number;
+    render: boolean;
+    bindGroup: GPUBindGroup;
+    pipeline: GPURenderPipeline;
+    lightDataBuffer: GPUBuffer;
 }
 
 export class Renderer extends RendererOrigin {
 
-    private trianglePipeline!: GPURenderPipeline;
-    private triangleBindGroup!: GPUBindGroup;
-
     private camPosBuffer!: GPUBuffer;
+
 
     renderPassDescriptor!: GPURenderPassDescriptor;
 
@@ -30,12 +32,18 @@ export class Renderer extends RendererOrigin {
     private model!: ObjModel;
     private modelBuffersMap: Map<string, ModelBuffers> = new Map();
 
+    lightColor: vec3 = vec3.fromValues(1.0, 1.0, 1.0);
+    lightPos: vec3 = vec3.fromValues(0.0, 1000.0, 0.0);
+    lightIntensity: number = 2.0;
 
     //collision response
     private collisionTempBuffer!: GPUBuffer;
 
     //shaders
     private shader!: Textures;
+
+    //model highlight
+    private modelNames: string[] = [];
 
     /* constructor */
     constructor(canvasId: string) {
@@ -109,8 +117,6 @@ export class Renderer extends RendererOrigin {
     }
 
     async render() {
-        const currentTime = performance.now();
-
         this.setCamera(this.camera);
         this.makeRenderpassDescriptor();
 
@@ -121,12 +127,6 @@ export class Renderer extends RendererOrigin {
 
         this.device.queue.submit([commandEncoder.finish()]);
         await this.device.queue.onSubmittedWorkDone();
-
-        this.stats.ms = (currentTime - this.lastTime).toFixed(2);
-        this.stats.fps = Math.round(1000.0 / (currentTime - this.lastTime));
-
-        this.lastTime = currentTime;
-        this.localFrameCount++;
     }
 
     async MakeModelData() {
@@ -136,6 +136,17 @@ export class Renderer extends RendererOrigin {
 
         let center: vec3[] = [];
 
+        this.mvpUniformBuffer = this.device.createBuffer({
+            size: 64 * 3, // The total size needed for the matrices
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST // The buffer is used as a uniform and can be copied to
+        });
+
+        this.camPosBuffer = this.device.createBuffer({
+            size: 4 * Float32Array.BYTES_PER_ELEMENT, // vec3<f32> + padding
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+
         models.forEach((model, modelName) => {
             // 모델 데이터로부터 버퍼 생성
             const positionBuffer = makeFloat32ArrayBufferStorage(this.device, new Float32Array(model.vertices));
@@ -143,10 +154,137 @@ export class Renderer extends RendererOrigin {
             const uvBuffer = makeFloat32ArrayBufferStorage(this.device, new Float32Array(model.uvs));
             const normalBuffer = makeFloat32ArrayBufferStorage(this.device, new Float32Array(model.normals));
             const indicesLength = model.indices.length;
-            console.log(this.calculateModelCenter(model.vertices));
+            let render = true;
             center.push(this.calculateModelCenter(model.vertices));
+            const textureShaderModule = this.device.createShaderModule({ code: this.shader.getShaders() });
 
-            console.log("indicesLength:", indicesLength)
+            const lightDataBuffer = this.device.createBuffer({
+                size: 48, // vec3 position (12 bytes) + padding (4 bytes) + vec4 color (16 bytes) + intensity (4 bytes)
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+
+            const bindGroupLayout = this.device.createBindGroupLayout({
+                entries: [
+                    {
+                        binding: 0,
+                        visibility: GPUShaderStage.VERTEX,
+                        buffer: {}
+                    },
+                    {
+                        binding: 1,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        texture: {}
+                    },
+                    {
+                        binding: 2,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        sampler: {}
+                    },
+                    {
+                        binding: 3,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        buffer: {
+                            type: 'uniform',
+                        }
+                    },
+                    {
+                        binding: 4,
+                        visibility: GPUShaderStage.FRAGMENT,
+                        buffer: { type: 'uniform' }
+                    },
+                ]
+            });
+            const bindGroup = this.device.createBindGroup({
+                layout: bindGroupLayout,
+                entries: [
+                    {
+                        binding: 0,
+                        resource: {
+                            buffer: this.mvpUniformBuffer
+                        }
+                    },
+                    {
+                        binding: 1,
+                        resource: this.viewObject
+                    },
+                    {
+                        binding: 2,
+                        resource: this.samplerObject
+                    },
+                    {
+                        binding: 3,
+                        resource: {
+                            buffer: this.camPosBuffer
+                        }
+                    },
+                    {
+                        binding: 4,
+                        resource: {
+                            buffer: lightDataBuffer
+                        }
+                    }
+                ]
+            });
+
+            const pipelineLayout = this.device.createPipelineLayout({
+                bindGroupLayouts: [bindGroupLayout],
+            });
+
+            const pipeline = this.device.createRenderPipeline({
+                layout: pipelineLayout,
+                vertex: {
+                    module: textureShaderModule,
+                    entryPoint: 'vs_main',
+                    buffers: [{
+                        arrayStride: 12,
+                        attributes: [
+                            {
+                                shaderLocation: 0,
+                                format: "float32x3",
+                                offset: 0
+                            }
+                        ]
+                    },
+                    {
+                        arrayStride: 8,
+                        attributes: [
+                            {
+                                shaderLocation: 1,
+                                format: "float32x2",
+                                offset: 0
+                            }
+                        ]
+                    },
+                    {
+                        arrayStride: 12,
+                        attributes: [
+                            {
+                                shaderLocation: 2,
+                                format: "float32x2",
+                                offset: 0
+                            }
+                        ]
+                    }
+                    ],
+                },
+                fragment: {
+                    module: textureShaderModule,
+                    entryPoint: 'fs_main',
+                    targets: [{ format: this.format }],
+                },
+                primitive: {
+                    topology: 'triangle-list',
+                    //topology: 'line-list',
+                },
+                depthStencil: {
+                    depthWriteEnabled: true,
+                    depthCompare: 'less',
+                    format: 'depth32float',
+                },
+                multisample: {
+                    count: this.sampleCount,
+                },
+            });
 
             // 모델 이름을 키로 사용하여 모든 데이터 저장
             this.modelBuffersMap.set(modelName, {
@@ -155,11 +293,15 @@ export class Renderer extends RendererOrigin {
                 uvBuffer,
                 normalBuffer,
                 indicesLength,
+                render,
+                bindGroup,
+                pipeline,
+                lightDataBuffer
             });
+
+            this.modelNames.push(modelName);
         });
-        console.log(center);
         const overallCenter = this.calculateOverallCenter(center);
-        console.log(overallCenter);
         this.camera.target[0] = overallCenter[0];
         this.camera.target[1] = overallCenter[1];
         this.camera.target[2] = overallCenter[2];
@@ -191,155 +333,54 @@ export class Renderer extends RendererOrigin {
         return [xSum / count, ySum / count, zSum / count];
     }
 
-    createRenderPipeline(render_type: string = 'triangle-list') {
-        const textureShaderModule = this.device.createShaderModule({ code: this.shader.getShaders() });
-        const bindGroupLayout = this.device.createBindGroupLayout({
-            entries: [
-                {
-                    binding: 0,
-                    visibility: GPUShaderStage.VERTEX,
-                    buffer: {}
-                },
-                {
-                    binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    texture: {}
-                },
-                {
-                    binding: 2,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    sampler: {}
-                },
-                {
-                    binding: 3,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    buffer: {
-                        type: 'uniform',
-                    }
-                },
-            ]
-        });
-
-        this.mvpUniformBuffer = this.device.createBuffer({
-            size: 64 * 3, // The total size needed for the matrices
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST // The buffer is used as a uniform and can be copied to
-        });
-
-        this.camPosBuffer = this.device.createBuffer({
-            size: 4 * Float32Array.BYTES_PER_ELEMENT, // vec3<f32> + padding
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-
-        this.triangleBindGroup = this.device.createBindGroup({
-            layout: bindGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: this.mvpUniformBuffer
-                    }
-                },
-                {
-                    binding: 1,
-                    resource: this.viewObject
-                },
-                {
-                    binding: 2,
-                    resource: this.samplerObject
-                },
-                {
-                    binding: 3,
-                    resource: {
-                        buffer: this.camPosBuffer
-                    }
-                }
-            ]
-        });
-
-        const pipelineLayout = this.device.createPipelineLayout({
-            bindGroupLayouts: [bindGroupLayout],
-        });
-
-        this.trianglePipeline = this.device.createRenderPipeline({
-            layout: pipelineLayout,
-            vertex: {
-                module: textureShaderModule,
-                entryPoint: 'vs_main',
-                buffers: [{
-                    arrayStride: 12,
-                    attributes: [
-                        {
-                            shaderLocation: 0,
-                            format: "float32x3",
-                            offset: 0
-                        }
-                    ]
-                },
-                {
-                    arrayStride: 8,
-                    attributes: [
-                        {
-                            shaderLocation: 1,
-                            format: "float32x2",
-                            offset: 0
-                        }
-                    ]
-                },
-                {
-                    arrayStride: 12,
-                    attributes: [
-                        {
-                            shaderLocation: 2,
-                            format: "float32x2",
-                            offset: 0
-                        }
-                    ]
-                }
-                ],
-            },
-            fragment: {
-                module: textureShaderModule,
-                entryPoint: 'fs_main',
-                targets: [{ format: this.format }],
-            },
-            primitive: {
-                topology: 'triangle-list',
-                //topology: 'line-list',
-            },
-            depthStencil: {
-                depthWriteEnabled: true,
-                depthCompare: 'less',
-                format: 'depth32float',
-            },
-            multisample: {
-                count: this.sampleCount,
-            },
-        });
-    }
-
     renderObject(commandEncoder: GPUCommandEncoder) {
-        const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
         this.device.queue.writeBuffer(
             this.camPosBuffer,
             0,
             new Float32Array([...this.camera.position, 1.0]) // vec3 + padding
         );
-        passEncoder.setPipeline(this.trianglePipeline);
-        this.modelBuffersMap.forEach((buffers, modelName) => {
-            // 카메라 및 기타 유니폼 버퍼 업데이트 (생략)
-            // ...
 
-            // 렌더링 파이프라인 및 버퍼 설정
-            passEncoder.setPipeline(this.trianglePipeline);
-            passEncoder.setVertexBuffer(0, buffers.positionBuffer);
-            passEncoder.setVertexBuffer(1, buffers.uvBuffer);
-            passEncoder.setVertexBuffer(2, buffers.normalBuffer);
-            passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
-            passEncoder.setBindGroup(0, this.triangleBindGroup);
-            passEncoder.drawIndexed(buffers.indicesLength);
+        const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
+
+        this.modelBuffersMap.forEach((buffers, modelName) => {
+
+            if (modelName.includes("Headlight")) {
+                const lightData = [0.0, 0.0, 0.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
+
+                // 라이트 정보 설정
+                this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
+
+                // 렌더링 파이프라인 및 버퍼 설정
+                passEncoder.setPipeline(buffers.pipeline);
+                passEncoder.setVertexBuffer(0, buffers.positionBuffer);
+                passEncoder.setVertexBuffer(1, buffers.uvBuffer);
+                passEncoder.setVertexBuffer(2, buffers.normalBuffer);
+                passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
+                passEncoder.setBindGroup(0, buffers.bindGroup);
+                passEncoder.drawIndexed(buffers.indicesLength);
+            }
+            else {
+                const lightData =
+                    [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
+
+                // 라이트 정보 설정
+                this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
+
+                // 렌더링 파이프라인 및 버퍼 설정
+                passEncoder.setPipeline(buffers.pipeline);
+                passEncoder.setVertexBuffer(0, buffers.positionBuffer);
+                passEncoder.setVertexBuffer(1, buffers.uvBuffer);
+                passEncoder.setVertexBuffer(2, buffers.normalBuffer);
+                passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
+                passEncoder.setBindGroup(0, buffers.bindGroup);
+                passEncoder.drawIndexed(buffers.indicesLength);
+            }
         });
+
         passEncoder.end();
     }
+
+
 
     /* Make Metadata */
     makeRenderpassDescriptor() {
