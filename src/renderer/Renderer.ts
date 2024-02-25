@@ -132,7 +132,7 @@ export class Renderer extends RendererOrigin {
     async MakeModelData() {
         const loader = new ObjLoader();
 
-        const models = await loader.load('./objects/benz.obj', 1.0); // 예제 경로와 스케일
+        const models = await loader.load('./objects/benz_cut2.obj', 1.0); // 예제 경로와 스케일
 
         let center: vec3[] = [];
 
@@ -344,8 +344,8 @@ export class Renderer extends RendererOrigin {
 
         this.modelBuffersMap.forEach((buffers, modelName) => {
 
-            if (modelName.includes("Headlight")) {
-                const lightData = [0.0, 0.0, 0.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
+            if (!modelName.includes("Headlight")) {
+                const lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
 
                 // 라이트 정보 설정
                 this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
@@ -359,9 +359,12 @@ export class Renderer extends RendererOrigin {
                 passEncoder.setBindGroup(0, buffers.bindGroup);
                 passEncoder.drawIndexed(buffers.indicesLength);
             }
-            else {
-                const lightData =
-                    [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
+        });
+        this.modelBuffersMap.forEach((buffers, modelName) => {
+
+            if (modelName.includes("Headlight")) {
+                //const lightData = [0.0, 0.0, 0.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
+                const lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
 
                 // 라이트 정보 설정
                 this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
