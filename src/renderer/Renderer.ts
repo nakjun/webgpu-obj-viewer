@@ -4,23 +4,22 @@ import { makeFloat32ArrayBuffer, makeFloat32ArrayBufferStorage, makeUInt32IndexA
 import { ObjLoader, ObjModel } from './ObjLoader';
 import { Textures } from './Shader';
 
+interface ModelBuffers {
+    positionBuffer: GPUBuffer;
+    indexBuffer: GPUBuffer;
+    uvBuffer: GPUBuffer;
+    normalBuffer: GPUBuffer;
+    indicesLength: number;
+}
+
 export class Renderer extends RendererOrigin {
 
     private trianglePipeline!: GPURenderPipeline;
     private triangleBindGroup!: GPUBindGroup;
+
     private camPosBuffer!: GPUBuffer;
 
     renderPassDescriptor!: GPURenderPassDescriptor;
-
-
-    //sphere model
-    private ObjectPosBuffer!: GPUBuffer;
-    private objectIndexBuffer!: GPUBuffer;
-    private objectUVBuffer!: GPUBuffer;
-    private objectNormalBuffer!: GPUBuffer;
-    private objectIndicesLength!: number;
-    private objectBindGroup!: GPUBindGroup;
-    private objectNumTriangleBuffer!: GPUBuffer;
 
     //mateirals - sphere
     private textureObject!: GPUTexture
@@ -29,6 +28,8 @@ export class Renderer extends RendererOrigin {
 
     //3d objects
     private model!: ObjModel;
+    private modelBuffersMap: Map<string, ModelBuffers> = new Map();
+
 
     //collision response
     private collisionTempBuffer!: GPUBuffer;
@@ -131,31 +132,63 @@ export class Renderer extends RendererOrigin {
     async MakeModelData() {
         const loader = new ObjLoader();
 
-        this.model = await loader.load('./objects/Audi_R8_2017.obj', 100.0);
+        const models = await loader.load('./objects/benz.obj', 1.0); // 예제 경로와 스케일
 
-        console.log("object file load end");
+        let center: vec3[] = [];
 
-        var vertArray = new Float32Array(this.model.vertices);
-        var indArray = new Uint32Array(this.model.indices);
-        var normalArray = new Float32Array(this.model.normals);
-        var uvArray = new Float32Array(this.model.uvs);
-        this.objectIndicesLength = this.model.indices.length;
+        models.forEach((model, modelName) => {
+            // 모델 데이터로부터 버퍼 생성
+            const positionBuffer = makeFloat32ArrayBufferStorage(this.device, new Float32Array(model.vertices));
+            const indexBuffer = makeUInt32IndexArrayBuffer(this.device, new Uint32Array(model.indices));
+            const uvBuffer = makeFloat32ArrayBufferStorage(this.device, new Float32Array(model.uvs));
+            const normalBuffer = makeFloat32ArrayBufferStorage(this.device, new Float32Array(model.normals));
+            const indicesLength = model.indices.length;
+            console.log(this.calculateModelCenter(model.vertices));
+            center.push(this.calculateModelCenter(model.vertices));
 
-        console.log("this object's indices length: " + this.objectIndicesLength / 3);
+            console.log("indicesLength:", indicesLength)
 
-        this.ObjectPosBuffer = makeFloat32ArrayBufferStorage(this.device, vertArray);
-        this.objectIndexBuffer = makeUInt32IndexArrayBuffer(this.device, indArray);
-        this.objectUVBuffer = makeFloat32ArrayBufferStorage(this.device, uvArray);
-        this.objectNormalBuffer = makeFloat32ArrayBufferStorage(this.device, normalArray);
-
-        const numTriangleData = new Uint32Array([this.model.indices.length / 3]);
-        this.objectNumTriangleBuffer = this.device.createBuffer({
-            size: numTriangleData.byteLength,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            mappedAtCreation: true,
+            // 모델 이름을 키로 사용하여 모든 데이터 저장
+            this.modelBuffersMap.set(modelName, {
+                positionBuffer,
+                indexBuffer,
+                uvBuffer,
+                normalBuffer,
+                indicesLength,
+            });
         });
-        new Uint32Array(this.objectNumTriangleBuffer.getMappedRange()).set(numTriangleData);
-        this.objectNumTriangleBuffer.unmap();
+        console.log(center);
+        const overallCenter = this.calculateOverallCenter(center);
+        console.log(overallCenter);
+        this.camera.target[0] = overallCenter[0];
+        this.camera.target[1] = overallCenter[1];
+        this.camera.target[2] = overallCenter[2];
+    }
+
+    calculateModelCenter(vertices: number[]): [number, number, number] {
+        let xSum = 0, ySum = 0, zSum = 0;
+        const vertexCount = vertices.length / 3;
+
+        for (let i = 0; i < vertices.length; i += 3) {
+            xSum += vertices[i];
+            ySum += vertices[i + 1];
+            zSum += vertices[i + 2];
+        }
+
+        return [xSum / vertexCount, ySum / vertexCount, zSum / vertexCount];
+    }
+
+    calculateOverallCenter(centers: vec3[]): vec3 {
+        let xSum = 0, ySum = 0, zSum = 0;
+        const count = centers.length;
+
+        centers.forEach(center => {
+            xSum += center[0];
+            ySum += center[1];
+            zSum += center[2];
+        });
+
+        return [xSum / count, ySum / count, zSum / count];
     }
 
     createRenderPipeline(render_type: string = 'triangle-list') {
@@ -197,7 +230,7 @@ export class Renderer extends RendererOrigin {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        this.objectBindGroup = this.device.createBindGroup({
+        this.triangleBindGroup = this.device.createBindGroup({
             layout: bindGroupLayout,
             entries: [
                 {
@@ -292,13 +325,19 @@ export class Renderer extends RendererOrigin {
             new Float32Array([...this.camera.position, 1.0]) // vec3 + padding
         );
         passEncoder.setPipeline(this.trianglePipeline);
-        passEncoder.setVertexBuffer(0, this.ObjectPosBuffer); // 정점 버퍼 설정, 스프링의 경우 필요에 따라
-        passEncoder.setVertexBuffer(1, this.objectUVBuffer); // 정점 버퍼 설정, 스프링의 경우 필요에 따라
-        passEncoder.setVertexBuffer(2, this.objectNormalBuffer); // 정점 버퍼 설정, 스프링의 경우 필요에 따라
-        passEncoder.setIndexBuffer(this.objectIndexBuffer, 'uint32'); // 인덱스 포맷 수정
-        passEncoder.setBindGroup(0, this.objectBindGroup); // Set the bind group with MVP matrix
-        passEncoder.drawIndexed(this.objectIndicesLength);
+        this.modelBuffersMap.forEach((buffers, modelName) => {
+            // 카메라 및 기타 유니폼 버퍼 업데이트 (생략)
+            // ...
 
+            // 렌더링 파이프라인 및 버퍼 설정
+            passEncoder.setPipeline(this.trianglePipeline);
+            passEncoder.setVertexBuffer(0, buffers.positionBuffer);
+            passEncoder.setVertexBuffer(1, buffers.uvBuffer);
+            passEncoder.setVertexBuffer(2, buffers.normalBuffer);
+            passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
+            passEncoder.setBindGroup(0, this.triangleBindGroup);
+            passEncoder.drawIndexed(buffers.indicesLength);
+        });
         passEncoder.end();
     }
 

@@ -1,83 +1,105 @@
 export class ObjModel {
+    name: string;
     vertices: number[] = [];
     indices: number[] = [];
     normals: number[] = [];
     uvs: number[] = [];
+
+    constructor(name: string = '') {
+        this.name = name;
+    }
 }
 
 export class ObjLoader {
-    model: ObjModel = new ObjModel();
-    parse(objData: string, scale: number = 1.0): ObjModel {
-        const vertexPositions: number[][] = [];
-        const vertexNormals: number[][] = [];
-        const vertexUVs: number[][] = [];
-        const faces: string[][] = [];
+    models: Map<string, ObjModel> = new Map();
+    currentModel: ObjModel | null = null;
+    vertexPositions: number[][] = [];
+    vertexNormals: number[][] = [];
+    vertexUVs: number[][] = [];
+    faces: string[][] = [];
 
+    parse(objData: string, scale: number = 1.0) {
         objData.split('\n').forEach(line => {
             const parts = line.trim().split(/\s+/);
             switch (parts[0]) {
+                case 'o':
+                    this.finishCurrentModel(); // 현재 모델 처리를 마침
+                    this.currentModel = new ObjModel(parts.slice(1).join(' '));
+                    this.models.set(this.currentModel.name, this.currentModel);
+                    this.vertexPositions = []; // 새 모델을 위해 배열 초기화
+                    this.vertexNormals = [];
+                    this.vertexUVs = [];
+                    this.faces = [];
+                    break;
                 case 'v':
-                    vertexPositions.push(parts.slice(1).map(coord => parseFloat(coord) * scale));
+                    this.vertexPositions.push(parts.slice(1).map(coord => parseFloat(coord) * scale));
                     break;
                 case 'vn':
-                    vertexNormals.push(parts.slice(1).map(parseFloat));
+                    this.vertexNormals.push(parts.slice(1).map(parseFloat));
                     break;
                 case 'vt':
-                    vertexUVs.push(parts.slice(1).map(parseFloat));
+                    this.vertexUVs.push(parts.slice(1).map(parseFloat));
                     break;
                 case 'f':
-                    faces.push(parts.slice(1));
+                    this.faces.push(parts.slice(1));
                     break;
             }
         });
 
-        const indexMap = new Map<string, number>();
-        let currentIndex = 0;
+        this.finishCurrentModel();
+    }
 
-        faces.forEach(faceParts => {
-            const faceIndices = faceParts.map(part => {
-                const [pos, tex, norm] = part.split('/').map(e => e ? parseInt(e) - 1 : undefined);
-                const key = `${pos}|${tex}|${norm}`;
+    finishCurrentModel() {
+        if (this.currentModel) {
+            const indexMap = new Map<string, number>();
+            let currentIndex = 0;
 
-                if (indexMap.has(key)) {
-                    return indexMap.get(key)!;
-                } else {
-                    if (pos !== undefined) {
-                        const position = vertexPositions[pos];
-                        this.model.vertices.push(...position);
-                    }
+            this.faces.forEach(faceParts => {
+                const faceIndices = faceParts.map(part => {
+                    const [pos, tex, norm] = part.split('/').map(e => e ? parseInt(e) - 1 : undefined);
+                    const key = `${pos}|${tex}|${norm}`;
 
-                    if (tex !== undefined) {
-                        const uv = vertexUVs[tex];
-                        this.model.uvs.push(...uv);
+                    if (indexMap.has(key)) {
+                        return indexMap.get(key) ?? 0; // indexMap에서 undefined 반환 시 0으로 대체
                     } else {
-                        this.model.uvs.push(0, 0);
-                    }
+                        if (pos !== undefined) {
+                            const position = this.vertexPositions[pos];
+                            //console.log(pos, position);
+                            this.currentModel!.vertices.push(...position);
+                        }
 
-                    if (norm !== undefined) {
-                        const normal = vertexNormals[norm];
-                        this.model.normals.push(...normal);
-                    }
+                        if (tex !== undefined) {
+                            const uv = this.vertexUVs[tex];
+                            this.currentModel!.uvs.push(...uv);
+                        } else {
+                            this.currentModel!.uvs.push(0, 0);
+                        }
 
-                    indexMap.set(key, currentIndex);
-                    return currentIndex++;
+                        if (norm !== undefined) {
+                            const normal = this.vertexNormals[norm];
+                            this.currentModel!.normals.push(...normal);
+                        }
+
+                        indexMap.set(key, currentIndex);
+                        return currentIndex++;
+                    }
+                });
+
+                for (let i = 1; i < faceIndices.length - 1; i++) {
+                    this.currentModel!.indices.push(faceIndices[0], faceIndices[i], faceIndices[i + 1]);
                 }
             });
 
-            for (let i = 1; i < faceIndices.length - 1; i++) {
-                this.model.indices.push(faceIndices[0], faceIndices[i], faceIndices[i + 1]);
+            if (this.vertexNormals.length === 0) {
+                this.calculateNormals().forEach(n => this.currentModel!.normals.push(n));
             }
-        });
-
-        if (vertexNormals.length === 0) {
-            this.calculateNormals(this.model.vertices, this.model.indices).forEach(n => this.model.normals.push(n));
         }
-
-        return this.model;
     }
 
-    calculateNormals(vertices: number[], indices: number[]): number[] {
-        const normals = new Array(vertices.length / 3).fill(0).map(() => [0, 0, 0]);
+    calculateNormals(): number[] {
+        const normals = new Array(this.vertexPositions.length).fill(0).map(() => [0, 0, 0]);
+        const vertices = this.currentModel!.vertices;
+        const indices = this.currentModel!.indices;
 
         for (let i = 0; i < indices.length; i += 3) {
             const i0 = indices[i];
@@ -102,17 +124,17 @@ export class ObjLoader {
                 normals[i2][j] += norm[j];
             }
         }
-        const normalizedNormals = normals.flatMap(norm => {
+
+        return normals.flatMap(norm => {
             const len = Math.sqrt(norm[0] ** 2 + norm[1] ** 2 + norm[2] ** 2);
             return [norm[0] / len, norm[1] / len, norm[2] / len];
         });
-
-        return normalizedNormals;
     }
 
-    async load(url: string, scale: number = 1.0): Promise<ObjModel> {
+    async load(url: string, scale: number = 1.0): Promise<Map<string, ObjModel>> {
         const response = await fetch(url);
         const objData = await response.text();
-        return this.parse(objData, scale);
+        this.parse(objData, scale);
+        return this.models;
     }
 }
