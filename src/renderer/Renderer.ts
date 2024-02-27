@@ -311,7 +311,7 @@ export class Renderer extends RendererOrigin {
         this.camera.target[2] = overallCenter[2];
 
         this.camera.position[0] = this.camera_origin[0] = 200;
-        this.camera.position[1] = this.camera_origin[1] = 250;
+        this.camera.position[1] = this.camera_origin[1] = 100;
         this.camera.position[2] = this.camera_origin[2] = 250;
 
         const actions = {

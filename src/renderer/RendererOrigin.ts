@@ -167,7 +167,7 @@ export class RendererOrigin {
     }
 
     lookOrigin(){        
-        this.camera.position = vec3.fromValues(200, 250, 250);
+        this.camera.position = vec3.fromValues(200, 100, 250);
         console.log(this.camera_origin);
         this.updateRenderOptions();
     }
