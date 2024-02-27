@@ -29,7 +29,7 @@ export class Renderer extends RendererOrigin {
     private samplerObject!: GPUSampler
 
     //3d objects
-    private model!: ObjModel;
+    private models: Map<string, ObjModel> = new Map();
     private modelBuffersMap: Map<string, ModelBuffers> = new Map();
 
     lightColor: vec3 = vec3.fromValues(1.0, 1.0, 1.0);
@@ -48,7 +48,6 @@ export class Renderer extends RendererOrigin {
     /* constructor */
     constructor(canvasId: string) {
         super(canvasId);
-        this.model = new ObjModel();
         this.shader = new Textures();
     }
 
@@ -134,7 +133,7 @@ export class Renderer extends RendererOrigin {
     async MakeModelData() {
         const loader = new ObjLoader();
 
-        const models = await loader.load('./objects/split.obj', 1.0); // 예제 경로와 스케일
+        this.models = await loader.load('./objects/split.obj', 1.0); // 예제 경로와 스케일
 
         let center: vec3[] = [];
 
@@ -149,7 +148,10 @@ export class Renderer extends RendererOrigin {
         });
 
 
-        models.forEach((model, modelName) => {
+        this.models.forEach((model, modelName) => {
+            //하이라이트 할 object 설정
+            this.systemGUI.highlightOptionGui.add(model, 'isHighlighted').name(modelName + 'highlight');
+
             // 모델 데이터로부터 버퍼 생성
             const positionBuffer = makeFloat32ArrayBufferStorage(this.device, new Float32Array(model.vertices));
             const indexBuffer = makeUInt32IndexArrayBuffer(this.device, new Uint32Array(model.indices));
@@ -298,7 +300,7 @@ export class Renderer extends RendererOrigin {
                 render,
                 bindGroup,
                 pipeline,
-                lightDataBuffer
+                lightDataBuffer,                
             });
 
             this.modelNames.push(modelName);
@@ -345,43 +347,22 @@ export class Renderer extends RendererOrigin {
         const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
         this.modelBuffersMap.forEach((buffers, modelName) => {
-
-            if (modelName.includes("Headlight")) {
-                let lightData = [170.0, 500.0, 150.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
-                if (this.frameCount % 180 == 0) {
-                    if (this.localFrameCount % 2 == 0) {
-                        lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
-                    }
-                    this.localFrameCount++;
-                }
-
-                // 라이트 정보 설정
-                this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
-
-                // 렌더링 파이프라인 및 버퍼 설정
-                passEncoder.setPipeline(buffers.pipeline);
-                passEncoder.setVertexBuffer(0, buffers.positionBuffer);
-                passEncoder.setVertexBuffer(1, buffers.uvBuffer);
-                passEncoder.setVertexBuffer(2, buffers.normalBuffer);
-                passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
-                passEncoder.setBindGroup(0, buffers.bindGroup);
-                passEncoder.drawIndexed(buffers.indicesLength);
+            let lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];            
+            if(this.models.get(modelName)?.isHighlighted){
+                lightData = [170.0, 500.0, 150.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
             }
-            else {
-                const lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
+            
+            // 라이트 정보 설정
+            this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
 
-                // 라이트 정보 설정
-                this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
-
-                // 렌더링 파이프라인 및 버퍼 설정
-                passEncoder.setPipeline(buffers.pipeline);
-                passEncoder.setVertexBuffer(0, buffers.positionBuffer);
-                passEncoder.setVertexBuffer(1, buffers.uvBuffer);
-                passEncoder.setVertexBuffer(2, buffers.normalBuffer);
-                passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
-                passEncoder.setBindGroup(0, buffers.bindGroup);
-                passEncoder.drawIndexed(buffers.indicesLength);
-            }
+            // 렌더링 파이프라인 및 버퍼 설정
+            passEncoder.setPipeline(buffers.pipeline);
+            passEncoder.setVertexBuffer(0, buffers.positionBuffer);
+            passEncoder.setVertexBuffer(1, buffers.uvBuffer);
+            passEncoder.setVertexBuffer(2, buffers.normalBuffer);
+            passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
+            passEncoder.setBindGroup(0, buffers.bindGroup);
+            passEncoder.drawIndexed(buffers.indicesLength);
         });
 
         passEncoder.end();

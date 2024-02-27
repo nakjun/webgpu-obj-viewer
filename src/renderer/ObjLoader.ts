@@ -4,6 +4,7 @@ export class ObjModel {
     indices: number[] = [];
     normals: number[] = [];
     uvs: number[] = [];
+    isHighlighted: boolean = false;
 
     constructor(name: string = '') {
         this.name = name;
