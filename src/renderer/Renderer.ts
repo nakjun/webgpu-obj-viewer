@@ -150,7 +150,7 @@ export class Renderer extends RendererOrigin {
 
         this.models.forEach((model, modelName) => {
             //하이라이트 할 object 설정
-            this.systemGUI.highlightOptionGui.add(model, 'isHighlighted').name(modelName + 'highlight');
+            this.systemGUI.highlightOptionGui.add(model, 'isHighlighted').name(modelName);
 
             // 모델 데이터로부터 버퍼 생성
             const positionBuffer = makeFloat32ArrayBufferStorage(this.device, new Float32Array(model.vertices));
@@ -351,7 +351,7 @@ export class Renderer extends RendererOrigin {
             if(this.models.get(modelName)?.isHighlighted){
                 lightData = [170.0, 500.0, 150.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
             }
-            
+
             // 라이트 정보 설정
             this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
 
