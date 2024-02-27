@@ -17,6 +17,7 @@ export class RendererOrigin {
 
     //camera
     camera!: Camera;
+    camera_origin: vec3 = vec3.fromValues(-52.4, 31.2, -52.4);
     camera_position: vec3 = vec3.fromValues(-52.4, 31.2, -52.4);
     camera_target: vec3 = vec3.fromValues(0.0, 0.0, 0.0);
     camera_up: vec3 = vec3.fromValues(0.0, 1.0, 0.0);
@@ -61,13 +62,13 @@ export class RendererOrigin {
         this.fpsDisplay = document.getElementById('fpsDisplay');
 
         this.systemGUI = new SystemGUI();
-        this.camPosXControl = this.systemGUI.renderOptionGui.add(this.renderOptions, 'camPosX', -100, 100).name('Camera Position X').onChange((value: number) => {
+        this.camPosXControl = this.systemGUI.renderOptionGui.add(this.renderOptions, 'camPosX', -10000, 10000).name('Camera Position X').onChange((value: number) => {
             this.camera.position[0] = value;
         });
-        this.camPosYControl = this.systemGUI.renderOptionGui.add(this.renderOptions, 'camPosY', -100, 100).name('Camera Position Y').onChange((value: number) => {
+        this.camPosYControl = this.systemGUI.renderOptionGui.add(this.renderOptions, 'camPosY', -10000, 10000).name('Camera Position Y').onChange((value: number) => {
             this.camera.position[1] = value;
         });
-        this.camPosZControl = this.systemGUI.renderOptionGui.add(this.renderOptions, 'camPosZ', -100, 100).name('Camera Position Z').onChange((value: number) => {
+        this.camPosZControl = this.systemGUI.renderOptionGui.add(this.renderOptions, 'camPosZ', -10000, 10000).name('Camera Position Z').onChange((value: number) => {
             this.camera.position[2] = value;
         });
 
@@ -142,6 +143,33 @@ export class RendererOrigin {
             0, // Start at the beginning of the data
             data.byteLength // The amount of data to write
         );
+    }
+
+    lookLeftSide(){
+        this.camera.position[0] = -400.0;
+        this.camera.position[1] = this.camera_origin[1];
+        this.camera.position[2] = 150.0;
+        this.updateRenderOptions();
+    }
+
+    lookRightSide(){
+        this.camera.position[0] = 700.0;
+        this.camera.position[1] = this.camera_origin[1];
+        this.camera.position[2] = 150.0;
+        this.updateRenderOptions();
+    }
+
+    lookUpSide(){
+        this.camera.position[0] = this.camera_origin[0];
+        this.camera.position[1] = this.camera_origin[1] * 3.0;
+        this.camera.position[2] = this.camera_origin[2];
+        this.updateRenderOptions();
+    }
+
+    lookOrigin(){        
+        this.camera.position = vec3.fromValues(200, 250, 250);
+        console.log(this.camera_origin);
+        this.updateRenderOptions();
     }
 
     updateRenderOptions() {

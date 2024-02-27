@@ -309,6 +309,24 @@ export class Renderer extends RendererOrigin {
         this.camera.target[0] = overallCenter[0];
         this.camera.target[1] = overallCenter[1];
         this.camera.target[2] = overallCenter[2];
+
+        this.camera.position[0] = this.camera_origin[0] = 200;
+        this.camera.position[1] = this.camera_origin[1] = 250;
+        this.camera.position[2] = this.camera_origin[2] = 250;
+
+        const actions = {
+            lookLeft: () => this.lookLeftSide(),
+            lookRight: () => this.lookRightSide(),
+            lookUp: () => this.lookUpSide(),
+            lookOrigin:() => this.lookOrigin()
+        };
+        this.systemGUI.renderOptionGui.add(actions, 'lookOrigin').name('Origin View');
+        this.systemGUI.renderOptionGui.add(actions, 'lookLeft').name('Left View');
+        this.systemGUI.renderOptionGui.add(actions, 'lookRight').name('Right View');
+        this.systemGUI.renderOptionGui.add(actions, 'lookUp').name('Up View');
+        //this.systemGUI.renderOptionGui.addBu
+
+        this.updateRenderOptions();
     }
 
     calculateModelCenter(vertices: number[]): [number, number, number] {
