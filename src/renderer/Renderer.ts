@@ -133,7 +133,7 @@ export class Renderer extends RendererOrigin {
     async MakeModelData() {
         const loader = new ObjLoader();
 
-        this.models = await loader.load('./objects/split.obj', 1.0); // 예제 경로와 스케일
+        this.models = await loader.load('./objects/benz2.obj', 50.0); // 예제 경로와 스케일
 
         let center: vec3[] = [];
 
@@ -300,7 +300,7 @@ export class Renderer extends RendererOrigin {
                 render,
                 bindGroup,
                 pipeline,
-                lightDataBuffer,                
+                lightDataBuffer,
             });
 
             this.modelNames.push(modelName);
@@ -310,15 +310,15 @@ export class Renderer extends RendererOrigin {
         this.camera.target[1] = overallCenter[1];
         this.camera.target[2] = overallCenter[2];
 
-        this.camera.position[0] = this.camera_origin[0] = 200;
-        this.camera.position[1] = this.camera_origin[1] = 100;
-        this.camera.position[2] = this.camera_origin[2] = 250;
+        this.camera.position[0] = this.camera_origin[0] = -25;
+        this.camera.position[1] = this.camera_origin[1] = 400;
+        this.camera.position[2] = this.camera_origin[2] = 750;
 
         const actions = {
             lookLeft: () => this.lookLeftSide(),
             lookRight: () => this.lookRightSide(),
             lookUp: () => this.lookUpSide(),
-            lookOrigin:() => this.lookOrigin()
+            lookOrigin: () => this.lookOrigin()
         };
         this.systemGUI.renderOptionGui.add(actions, 'lookOrigin').name('Origin View');
         this.systemGUI.renderOptionGui.add(actions, 'lookLeft').name('Left View');
@@ -365,8 +365,8 @@ export class Renderer extends RendererOrigin {
         const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
         this.modelBuffersMap.forEach((buffers, modelName) => {
-            let lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];            
-            if(this.models.get(modelName)?.isHighlighted){
+            let lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
+            if (this.models.get(modelName)?.isHighlighted) {
                 lightData = [170.0, 500.0, 150.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
             }
 

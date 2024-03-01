@@ -17,8 +17,8 @@ export class RendererOrigin {
 
     //camera
     camera!: Camera;
-    camera_origin: vec3 = vec3.fromValues(-52.4, 31.2, -52.4);
-    camera_position: vec3 = vec3.fromValues(-52.4, 31.2, -52.4);
+    camera_origin: vec3 = vec3.fromValues(-25, 400, 750);
+    camera_position: vec3 = vec3.fromValues(-25, 400, 750);
     camera_target: vec3 = vec3.fromValues(0.0, 0.0, 0.0);
     camera_up: vec3 = vec3.fromValues(0.0, 1.0, 0.0);
 
@@ -145,29 +145,29 @@ export class RendererOrigin {
         );
     }
 
-    lookLeftSide(){
+    lookLeftSide() {
         this.camera.position[0] = -400.0;
         this.camera.position[1] = this.camera_origin[1];
         this.camera.position[2] = 150.0;
         this.updateRenderOptions();
     }
 
-    lookRightSide(){
+    lookRightSide() {
         this.camera.position[0] = 700.0;
         this.camera.position[1] = this.camera_origin[1];
         this.camera.position[2] = 150.0;
         this.updateRenderOptions();
     }
 
-    lookUpSide(){
+    lookUpSide() {
         this.camera.position[0] = this.camera_origin[0];
         this.camera.position[1] = this.camera_origin[1] * 3.0;
         this.camera.position[2] = this.camera_origin[2];
         this.updateRenderOptions();
     }
 
-    lookOrigin(){        
-        this.camera.position = vec3.fromValues(200, 100, 250);
+    lookOrigin() {
+        this.camera.position = vec3.fromValues(-25, 400, 750);
         console.log(this.camera_origin);
         this.updateRenderOptions();
     }
@@ -183,10 +183,15 @@ export class RendererOrigin {
     }
 
     rotateCamera(dx: number, dy: number) {
-        this.camera.position[0] += dx;
-        this.camera.position[1] += dy;
+        if (this.camera.position[1] > 200) {
+            this.camera.position[0] += dx;
+            this.camera.position[1] += dy;
 
-        this.updateRenderOptions();
+            this.updateRenderOptions();
+        }
+        else {
+            this.camera.position[1] = 201;
+        }
     }
 
     panCamera(dx: number, dy: number) {
