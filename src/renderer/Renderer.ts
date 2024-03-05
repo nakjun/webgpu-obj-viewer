@@ -13,6 +13,7 @@ interface ModelBuffers {
     render: boolean;
     bindGroup: GPUBindGroup;
     pipeline: GPURenderPipeline;
+    highlightPipeline: GPURenderPipeline;
     lightDataBuffer: GPUBuffer;
 }
 
@@ -133,7 +134,7 @@ export class Renderer extends RendererOrigin {
     async MakeModelData() {
         const loader = new ObjLoader();
 
-        this.models = await loader.load('./objects/benz2.obj', 50.0); // 예제 경로와 스케일
+        this.models = await loader.load('./objects/benz3.obj', 50.0); // 예제 경로와 스케일
 
         let center: vec3[] = [];
 
@@ -161,6 +162,7 @@ export class Renderer extends RendererOrigin {
             let render = true;
             center.push(this.calculateModelCenter(model.vertices));
             const textureShaderModule = this.device.createShaderModule({ code: this.shader.getShaders() });
+            const textureShaderModuleHighlight = this.device.createShaderModule({ code: this.shader.getRedShader() });
 
             const lightDataBuffer = this.device.createBuffer({
                 size: 48, // vec3 position (12 bytes) + padding (4 bytes) + vec4 color (16 bytes) + intensity (4 bytes)
@@ -290,6 +292,61 @@ export class Renderer extends RendererOrigin {
                 },
             });
 
+            const highlightPipeline = this.device.createRenderPipeline({
+                layout: pipelineLayout,
+                vertex: {
+                    module: textureShaderModuleHighlight,
+                    entryPoint: 'vs_main',
+                    buffers: [{
+                        arrayStride: 12,
+                        attributes: [
+                            {
+                                shaderLocation: 0,
+                                format: "float32x3",
+                                offset: 0
+                            }
+                        ]
+                    },
+                    {
+                        arrayStride: 8,
+                        attributes: [
+                            {
+                                shaderLocation: 1,
+                                format: "float32x2",
+                                offset: 0
+                            }
+                        ]
+                    },
+                    {
+                        arrayStride: 12,
+                        attributes: [
+                            {
+                                shaderLocation: 2,
+                                format: "float32x2",
+                                offset: 0
+                            }
+                        ]
+                    }
+                    ],
+                },
+                fragment: {
+                    module: textureShaderModuleHighlight,
+                    entryPoint: 'fs_main',
+                    targets: [{ format: this.format }],
+                },
+                primitive: {
+                    topology: 'triangle-list',
+                },
+                depthStencil: {
+                    depthWriteEnabled: true,
+                    depthCompare: 'less',
+                    format: 'depth32float',
+                },
+                multisample: {
+                    count: this.sampleCount,
+                },
+            });
+
             // 모델 이름을 키로 사용하여 모든 데이터 저장
             this.modelBuffersMap.set(modelName, {
                 positionBuffer,
@@ -301,6 +358,7 @@ export class Renderer extends RendererOrigin {
                 bindGroup,
                 pipeline,
                 lightDataBuffer,
+                highlightPipeline
             });
 
             this.modelNames.push(modelName);
@@ -366,21 +424,31 @@ export class Renderer extends RendererOrigin {
 
         this.modelBuffersMap.forEach((buffers, modelName) => {
             let lightData = [this.lightPos[0], this.lightPos[1], this.lightPos[2], 0.0, this.lightColor[0], this.lightColor[1], this.lightColor[2], 1.0, this.lightIntensity, 0.0, 0.0, 0.0];
-            if (this.models.get(modelName)?.isHighlighted) {
-                lightData = [170.0, 500.0, 150.0, 0.0, this.lightColor[0], 0.0, 0.0, 1.0, this.lightIntensity * 5.0, 0.0, 0.0, 0.0];
-            }
-
             // 라이트 정보 설정
             this.device.queue.writeBuffer(buffers.lightDataBuffer, 0, new Float32Array(lightData));
 
-            // 렌더링 파이프라인 및 버퍼 설정
-            passEncoder.setPipeline(buffers.pipeline);
-            passEncoder.setVertexBuffer(0, buffers.positionBuffer);
-            passEncoder.setVertexBuffer(1, buffers.uvBuffer);
-            passEncoder.setVertexBuffer(2, buffers.normalBuffer);
-            passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
-            passEncoder.setBindGroup(0, buffers.bindGroup);
-            passEncoder.drawIndexed(buffers.indicesLength);
+            if (this.models.get(modelName)?.isHighlighted) {
+                // 렌더링 파이프라인 및 버퍼 설정
+                passEncoder.setPipeline(buffers.highlightPipeline);
+                passEncoder.setVertexBuffer(0, buffers.positionBuffer);
+                passEncoder.setVertexBuffer(1, buffers.uvBuffer);
+                passEncoder.setVertexBuffer(2, buffers.normalBuffer);
+                passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
+                passEncoder.setBindGroup(0, buffers.bindGroup);
+                passEncoder.drawIndexed(buffers.indicesLength);
+
+            } else {
+                // 렌더링 파이프라인 및 버퍼 설정
+                passEncoder.setPipeline(buffers.pipeline);
+                passEncoder.setVertexBuffer(0, buffers.positionBuffer);
+                passEncoder.setVertexBuffer(1, buffers.uvBuffer);
+                passEncoder.setVertexBuffer(2, buffers.normalBuffer);
+                passEncoder.setIndexBuffer(buffers.indexBuffer, 'uint32');
+                passEncoder.setBindGroup(0, buffers.bindGroup);
+                passEncoder.drawIndexed(buffers.indicesLength);
+            }
+
+
         });
 
         passEncoder.end();
