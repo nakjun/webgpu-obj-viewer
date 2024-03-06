@@ -2,28 +2,45 @@ export class ObjModel {
     name: string;
     vertices: number[] = [];
     indices: number[] = [];
+    materials: string[] = [];
     normals: number[] = [];
     uvs: number[] = [];
-    isHighlighted: boolean = false;
+    isHighlighted: boolean = false;    
 
     constructor(name: string = '') {
         this.name = name;
     }
 }
 
+interface Material {
+    name: string;
+    Ns: number;
+    Ka: [number, number, number];
+    Kd: [number, number, number];
+    Ks: [number, number, number];
+    Ke: [number, number, number];
+    Ni: number;
+    d: number;
+    illum: number;
+    map_Kd?: string; // 추가: Diffuse texture map
+}
+
 export class ObjLoader {
     models: Map<string, ObjModel> = new Map();
+    materials: Map<string, Material> = new Map();
     currentModel: ObjModel | null = null;
+    currentMaterial: Material | null = null;
     vertexPositions: number[][] = [];
     vertexNormals: number[][] = [];
     vertexUVs: number[][] = [];
     faces: string[][] = [];
-
+    materialData: string[] = [];
     curr_offset_pos: number = 0;
     curr_offset_uv: number = 0;
     curr_offset_norm: number = 0;
 
     parse(objData: string, scale: number = 1.0) {
+        let currentMaterialName = ""; // 현재 재질 이름 저장
         objData.split('\n').forEach(line => {
             const parts = line.trim().split(/\s+/);
             switch (parts[0]) {
@@ -41,13 +58,74 @@ export class ObjLoader {
                 case 'vt':
                     this.vertexUVs.push(parts.slice(1).map(parseFloat));
                     break;
+                case 'usemtl':
+                    currentMaterialName = parts[1]; // 재질 이름 갱신
+                    break;
                 case 'f':
                     this.faces.push(parts.slice(1));
-                    break;
+                    this.materialData.push(currentMaterialName);
+                    break;                
             }
         });
 
         this.finishCurrentModel();
+    }
+
+    parseMtl(mtlData: string) {
+        let currentMaterial!: Material;
+    
+        mtlData.split('\n').forEach(line => {
+            const parts = line.trim().split(/\s+/);
+            switch(parts[0]) {
+                case 'newmtl':
+                    if (currentMaterial) {
+                        // 이전에 생성된 currentMaterial이 있다면, this.materials에 추가
+                        this.materials.set(currentMaterial.name, currentMaterial);
+                    }
+                    // 새로운 재질 객체 생성
+                    currentMaterial = {
+                        name: parts[1],
+                        Ns: 0,
+                        Ka: [0, 0, 0],
+                        Kd: [0, 0, 0],
+                        Ks: [0, 0, 0],
+                        Ke: [0, 0, 0],
+                        Ni: 0,
+                        d: 0,
+                        illum: 0
+                    };
+                    break;
+                case 'Ns':
+                    currentMaterial!.Ns = parseFloat(parts[1]);
+                    break;
+                case 'Ka':
+                    currentMaterial!.Ka = [parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])];
+                    break;
+                case 'Kd':
+                    currentMaterial!.Kd = [parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])];
+                    break;
+                case 'Ks':
+                    currentMaterial!.Ks = [parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])];
+                    break;
+                case 'Ke':
+                    currentMaterial!.Ke = [parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])];
+                    break;
+                case 'Ni':
+                    currentMaterial!.Ni = parseFloat(parts[1]);
+                    break;
+                case 'd':
+                    currentMaterial!.d = parseFloat(parts[1]);
+                    break;
+                case 'illum':
+                    currentMaterial!.illum = parseInt(parts[1]);
+                    break;
+            }
+        });
+    
+        // 마지막 재질 객체도 materials 맵에 추가
+        if (currentMaterial) {
+            this.materials.set(currentMaterial.name, currentMaterial);
+        }
     }
 
     finishCurrentModel() {
@@ -93,6 +171,10 @@ export class ObjLoader {
                 }
             });
 
+            this.materialData.forEach(value => {
+                this.currentModel?.materials.push(value);
+            }); 
+
             if (this.vertexNormals.length === 0) {
                 this.calculateNormals().forEach(n => this.currentModel!.normals.push(n));
             }
@@ -104,6 +186,7 @@ export class ObjLoader {
         this.vertexUVs = [];
         this.vertexNormals = [];
         this.faces = [];
+        this.materialData = [];
     }
 
     calculateNormals(): number[] {
@@ -141,9 +224,17 @@ export class ObjLoader {
         });
     }
 
-    async load(url: string, scale: number = 1.0): Promise<Map<string, ObjModel>> {
+    async load(url: string, scale: number = 1.0): Promise<Map<string, ObjModel>> {        
+        // 파일명에서 확장자 이전의 부분만 추출
+        const mtl = url.split('.obj')[0]+'.mtl';
+
         const response = await fetch(url);
+        const mtlResponse = await fetch(mtl);        
         const objData = await response.text();
+        const mtlData = await mtlResponse.text();        
+
+        this.parseMtl(mtlData);                
+        console.log(this.materials);
         this.parse(objData, scale);
         return this.models;
     }
