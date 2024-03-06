@@ -36,10 +36,16 @@ export const Initialize = async () => {
         canvas.addEventListener('mousemove', (event) => {
             if (isLeftMouseDown) {
                 // 카메라 회전 로직 구현
-                const dx = event.clientX - lastMouseX;
-                const dy = event.clientY - lastMouseY;
-                //console.log("rotate");
-                sceneManager.rotateCamera(dx, dy);
+                var dx = event.clientX - lastMouseX;
+                var dy = event.clientY - lastMouseY;
+                //console.log(dx, dy);
+                //sceneManager.rotateCamera(dx, dy);
+
+                // 모델 회전 로직 적용
+                sceneManager.rotateModel(sceneManager.model, dx/5.0, 0); // rotateModel 함수를 사용하여 모델 회전
+
+                // Uniform 버퍼 업데이트를 위한 매트릭스 정보 업데이트
+                sceneManager.updateUniformBuffer(sceneManager.model, sceneManager.view, sceneManager.projection);
 
             } else if (isRightMouseDown) {
                 // 카메라 패닝 로직 구현

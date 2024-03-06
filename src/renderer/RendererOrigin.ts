@@ -12,15 +12,18 @@ export class RendererOrigin {
     resolveTexture!: GPUTexture;
     pipeline!: GPURenderPipeline;
     mvpUniformBuffer!: GPUBuffer;
-
     systemGUI!: SystemGUI;
-
+    
+    
     //camera
     camera!: Camera;
     camera_origin: vec3 = vec3.fromValues(-25, 400, 750);
     camera_position: vec3 = vec3.fromValues(-25, 400, 750);
     camera_target: vec3 = vec3.fromValues(0.0, 0.0, 0.0);
     camera_up: vec3 = vec3.fromValues(0.0, 1.0, 0.0);
+    model!:mat4;
+    view!:mat4;
+    projection!:mat4;
 
     //fps
     frameCount: number = 0;
@@ -90,8 +93,9 @@ export class RendererOrigin {
         });
         this.createDepthTexture();
         this.createResolveTexture();
-        //this.printDeviceLimits();
-
+        this.projection = mat4.create();
+        this.view = mat4.create();
+        this.model = mat4.create();
     }
 
     createDepthTexture() {
@@ -114,18 +118,29 @@ export class RendererOrigin {
 
     setCamera(camera: Camera) {
         // Projection matrix: Perspective projection
-        const projection = mat4.create();
-        mat4.perspective(projection, camera.fov, this.canvas.width / this.canvas.height, camera.near, camera.far);
+        this.projection = mat4.create();
+        mat4.perspective(this.projection, camera.fov, this.canvas.width / this.canvas.height, camera.near, camera.far);
 
         // View matrix: Camera's position and orientation in the world
-        const view = mat4.create();
-        mat4.lookAt(view, camera.position, camera.target, camera.up);
-
-        // Model matrix: For now, we can use an identity matrix if we're not transforming the particles
-        const model = mat4.create(); // No transformation to the model
+        this.view = mat4.create();
+        mat4.lookAt(this.view, camera.position, camera.target, camera.up);
 
         // Now, update the buffer with these matrices
-        this.updateUniformBuffer(model, view, projection);
+        this.updateUniformBuffer(this.model, this.view, this.projection);
+    }
+
+    rotateModel(model:mat4, dx:number, dy:number){
+        const angleX = dy * Math.PI / 180;
+        const angleY = dx * Math.PI / 180;
+    
+        // x축 주변으로 회전
+        mat4.rotateX(model, model, angleX);
+    
+        // y축 주변으로 회전
+        mat4.rotateY(model, model, angleY);
+    
+        // 변환된 모델 행렬을 반환 (이 경우는 필요에 따라)
+        return model;    
     }
 
     updateUniformBuffer(model: mat4, view: mat4, projection: mat4) {
