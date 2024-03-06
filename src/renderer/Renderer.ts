@@ -45,7 +45,7 @@ export class Renderer extends RendererOrigin {
     private modelBuffersMap: Map<string, ModelBuffers> = new Map();
 
     lightColor: vec3 = vec3.fromValues(1.0, 1.0, 1.0);
-    lightPos: vec3 = vec3.fromValues(0.0, 15000.0, 0.0);
+    lightPos: vec3 = vec3.fromValues(50.0, 1200.0, 500.0);
     lightIntensity: number = 2.0;
 
     //collision response
